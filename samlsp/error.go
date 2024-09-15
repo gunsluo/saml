@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/crewjam/saml"
+	"github.com/gunsluo/saml"
 )
 
 // ErrorFunction is a callback that is invoked to return an error to the
