@@ -5,6 +5,7 @@ import (
 	"compress/flate"
 	"encoding/xml"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/beevik/etree"
@@ -21,11 +22,61 @@ type RequestedAuthnContext struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (r *RequestedAuthnContext) Element() *etree.Element {
-	el := etree.NewElement("samlp:RequestedAuthnContext")
+	el := etree.NewElement("saml2p:RequestedAuthnContext")
 	el.CreateAttr("Comparison", r.Comparison)
-	elContext := etree.NewElement("saml:AuthnContextClassRef")
-	elContext.SetText(r.AuthnContextClassRef)
-	el.AddChild(elContext)
+	for _, authnContext := range strings.Split(r.AuthnContextClassRef, ",") {
+		elContext := etree.NewElement("saml2:AuthnContextClassRef")
+		elContext.CreateAttr("xmlns:saml2", "urn:oasis:names:tc:SAML:2.0:assertion")
+		elContext.SetText(authnContext)
+		el.AddChild(elContext)
+	}
+	return el
+}
+
+type Scoping struct {
+	XMLName    xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:protocol Scoping"`
+	ProxyCount *int     `xml:",attr"`
+	IDPList    *IDPList `xml:"IDPList"`
+}
+
+func (r *Scoping) Element() *etree.Element {
+	el := etree.NewElement("saml2p:Scoping")
+	if r.ProxyCount != nil {
+		el.CreateAttr("ProxyCount", strconv.Itoa(*r.ProxyCount))
+	}
+	if r.IDPList != nil {
+		el.AddChild(r.IDPList.Element())
+	}
+	return el
+}
+
+type IDPList struct {
+	XMLName xml.Name    `xml:"urn:oasis:names:tc:SAML:2.0:protocol IDPList"`
+	Entries []*IDPEntry `xml:"IDPEntry"`
+}
+
+func (r *IDPList) Element() *etree.Element {
+	el := etree.NewElement("saml2p:IDPList")
+	for _, entry := range r.Entries {
+		el.AddChild(entry.Element())
+	}
+	return el
+}
+
+type IDPEntry struct {
+	XMLName    xml.Name `xml:"urn:oasis:names:tc:SAML:2.0:protocol IDPEntry"`
+	Loc        *string  `xml:",attr"`
+	ProviderID *string  `xml:",attr"`
+}
+
+func (r *IDPEntry) Element() *etree.Element {
+	el := etree.NewElement("saml2p:IDPEntry")
+	if r.Loc != nil {
+		el.CreateAttr("Loc", *r.Loc)
+	}
+	if r.ProviderID != nil {
+		el.CreateAttr("ProviderID", *r.ProviderID)
+	}
 	return el
 }
 
@@ -48,7 +99,7 @@ type AuthnRequest struct {
 	NameIDPolicy          *NameIDPolicy `xml:"urn:oasis:names:tc:SAML:2.0:protocol NameIDPolicy"`
 	Conditions            *Conditions
 	RequestedAuthnContext *RequestedAuthnContext
-	// Scoping               *Scoping // TODO
+	Scoping               *Scoping
 
 	ForceAuthn                     *bool  `xml:",attr"`
 	IsPassive                      *bool  `xml:",attr"`
@@ -80,9 +131,8 @@ type LogoutRequest struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (r *LogoutRequest) Element() *etree.Element {
-	el := etree.NewElement("samlp:LogoutRequest")
-	el.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
-	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	el := etree.NewElement("saml2p:LogoutRequest")
+	el.CreateAttr("xmlns:saml2p", "urn:oasis:names:tc:SAML:2.0:protocol")
 	el.CreateAttr("ID", r.ID)
 	el.CreateAttr("Version", r.Version)
 	el.CreateAttr("IssueInstant", r.IssueInstant.Format(timeFormat))
@@ -179,9 +229,8 @@ func (r *LogoutRequest) Deflate() ([]byte, error) {
 
 // Element returns an etree.Element representing the object in XML form.
 func (r *AuthnRequest) Element() *etree.Element {
-	el := etree.NewElement("samlp:AuthnRequest")
-	el.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
-	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	el := etree.NewElement("saml2p:AuthnRequest")
+	el.CreateAttr("xmlns:saml2p", "urn:oasis:names:tc:SAML:2.0:protocol")
 	el.CreateAttr("ID", r.ID)
 	el.CreateAttr("Version", r.Version)
 	el.CreateAttr("IssueInstant", r.IssueInstant.Format(timeFormat))
@@ -209,9 +258,9 @@ func (r *AuthnRequest) Element() *etree.Element {
 	if r.RequestedAuthnContext != nil {
 		el.AddChild(r.RequestedAuthnContext.Element())
 	}
-	// if r.Scoping != nil {
-	// 	el.AddChild(r.Scoping.Element())
-	// }
+	if r.Scoping != nil {
+		el.AddChild(r.Scoping.Element())
+	}
 	if r.ForceAuthn != nil {
 		el.CreateAttr("ForceAuthn", strconv.FormatBool(*r.ForceAuthn))
 	}
@@ -279,7 +328,8 @@ type Issuer struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (a *Issuer) Element() *etree.Element {
-	el := etree.NewElement("saml:Issuer")
+	el := etree.NewElement("saml2:Issuer")
+	el.CreateAttr("xmlns:saml2", "urn:oasis:names:tc:SAML:2.0:assertion")
 	if a.NameQualifier != "" {
 		el.CreateAttr("NameQualifier", a.NameQualifier)
 	}
@@ -308,7 +358,7 @@ type NameIDPolicy struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (a *NameIDPolicy) Element() *etree.Element {
-	el := etree.NewElement("samlp:NameIDPolicy")
+	el := etree.NewElement("saml2p:NameIDPolicy")
 	if a.Format != nil && *a.Format != "" {
 		el.CreateAttr("Format", *a.Format)
 	}
@@ -334,9 +384,8 @@ type ArtifactResolve struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (r *ArtifactResolve) Element() *etree.Element {
-	el := etree.NewElement("samlp:ArtifactResolve")
-	el.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
-	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	el := etree.NewElement("saml2p:ArtifactResolve")
+	el.CreateAttr("xmlns:saml2p", "urn:oasis:names:tc:SAML:2.0:protocol")
 
 	// Note: This namespace is not used by any element or attribute name, but
 	// is required so that the AttributeValue type element can have a value like
@@ -353,7 +402,7 @@ func (r *ArtifactResolve) Element() *etree.Element {
 	if r.Issuer != nil {
 		el.AddChild(r.Issuer.Element())
 	}
-	artifact := etree.NewElement("samlp:Artifact")
+	artifact := etree.NewElement("saml2p:Artifact")
 	artifact.SetText(r.Artifact)
 	el.AddChild(artifact)
 	if r.Signature != nil {
@@ -417,9 +466,8 @@ type ArtifactResponse struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (r *ArtifactResponse) Element() *etree.Element {
-	el := etree.NewElement("samlp:ArtifactResponse")
-	el.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
-	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	el := etree.NewElement("saml2p:ArtifactResponse")
+	el.CreateAttr("xmlns:saml2p", "urn:oasis:names:tc:SAML:2.0:protocol")
 
 	// Note: This namespace is not used by any element or attribute name, but
 	// is required so that the AttributeValue type element can have a value like
@@ -500,9 +548,8 @@ type Response struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (r *Response) Element() *etree.Element {
-	el := etree.NewElement("samlp:Response")
-	el.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
-	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	el := etree.NewElement("saml2p:Response")
+	el.CreateAttr("xmlns:saml2p", "urn:oasis:names:tc:SAML:2.0:protocol")
 
 	// Note: This namespace is not used by any element or attribute name, but
 	// is required so that the AttributeValue type element can have a value like
@@ -582,7 +629,7 @@ type Status struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (s *Status) Element() *etree.Element {
-	el := etree.NewElement("samlp:Status")
+	el := etree.NewElement("saml2p:Status")
 	el.AddChild(s.StatusCode.Element())
 	if s.StatusMessage != nil {
 		el.AddChild(s.StatusMessage.Element())
@@ -604,7 +651,7 @@ type StatusCode struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (s *StatusCode) Element() *etree.Element {
-	el := etree.NewElement("samlp:StatusCode")
+	el := etree.NewElement("saml2p:StatusCode")
 	el.CreateAttr("Value", s.Value)
 	if s.StatusCode != nil {
 		el.AddChild(s.StatusCode.Element())
@@ -701,7 +748,7 @@ type StatusMessage struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (sm StatusMessage) Element() *etree.Element {
-	el := etree.NewElement("samlp:StatusMessage")
+	el := etree.NewElement("saml2p:StatusMessage")
 	el.SetText(sm.Value)
 	return el
 }
@@ -715,7 +762,7 @@ type StatusDetail struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (sm StatusDetail) Element() *etree.Element {
-	el := etree.NewElement("samlp:StatusDetail")
+	el := etree.NewElement("saml2p:StatusDetail")
 	for _, child := range sm.Children {
 		el.AddChild(child)
 	}
@@ -851,8 +898,8 @@ type SessionIndex struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (s *SessionIndex) Element() *etree.Element {
-	el := etree.NewElement("samlp:SessionIndex")
-	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	el := etree.NewElement("saml2p:SessionIndex")
+	el.CreateAttr("xmlns:saml2p", "urn:oasis:names:tc:SAML:2.0:protocol")
 	if s.Value != "" {
 		el.SetText(s.Value)
 	}
@@ -1176,7 +1223,8 @@ type AuthnContextClassRef struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (a *AuthnContextClassRef) Element() *etree.Element {
-	el := etree.NewElement("saml:AuthnContextClassRef")
+	el := etree.NewElement("saml2:AuthnContextClassRef")
+	el.CreateAttr("xmlns:saml2", "urn:oasis:names:tc:SAML:2.0:assertion")
 	el.SetText(a.Value)
 	return el
 }
@@ -1265,9 +1313,8 @@ type LogoutResponse struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (r *LogoutResponse) Element() *etree.Element {
-	el := etree.NewElement("samlp:LogoutResponse")
-	el.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
-	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	el := etree.NewElement("saml2p:LogoutResponse")
+	el.CreateAttr("xmlns:saml2p", "urn:oasis:names:tc:SAML:2.0:protocol")
 
 	el.CreateAttr("ID", r.ID)
 	if r.InResponseTo != "" {

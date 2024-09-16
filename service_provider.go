@@ -107,6 +107,8 @@ type ServiceProvider struct {
 	// context in authentication requests
 	RequestedAuthnContext *RequestedAuthnContext
 
+	Scoping *Scoping
+
 	// AllowIdpInitiated
 	AllowIDPInitiated bool
 
@@ -403,30 +405,29 @@ func (sp *ServiceProvider) MakeArtifactResolveRequest(artifactID string) (*Artif
 // MakeAuthenticationRequest produces a new AuthnRequest object to send to the idpURL
 // that uses the specified binding (HTTPRedirectBinding or HTTPPostBinding)
 func (sp *ServiceProvider) MakeAuthenticationRequest(idpURL string, binding string, resultBinding string) (*AuthnRequest, error) {
-
-	allowCreate := true
-	nameIDFormat := sp.nameIDFormat()
 	req := AuthnRequest{
 		AssertionConsumerServiceURL: sp.AcsURL.String(),
 		Destination:                 idpURL,
 		ProtocolBinding:             resultBinding, // default binding for the response
-		ID:                          fmt.Sprintf("id-%x", randomBytes(20)),
+		ID:                          newID(),
 		IssueInstant:                TimeNow(),
 		Version:                     "2.0",
 		Issuer: &Issuer{
-			Format: "urn:oasis:names:tc:SAML:2.0:nameid-format:entity",
-			Value:  firstSet(sp.EntityID, sp.MetadataURL.String()),
+			// Format: "urn:oasis:names:tc:SAML:2.0:nameid-format:entity",
+			Value: firstSet(sp.EntityID, sp.MetadataURL.String()),
 		},
-		NameIDPolicy: &NameIDPolicy{
-			AllowCreate: &allowCreate,
-			// TODO(ross): figure out exactly policy we need
-			// urn:mace:shibboleth:1.0:nameIdentifier
-			// urn:oasis:names:tc:SAML:2.0:nameid-format:transient
-			Format: &nameIDFormat,
-		},
+		// NameIDPolicy: &NameIDPolicy{
+		// 	AllowCreate: Bool(true),
+		// 	// TODO(ross): figure out exactly policy we need
+		// 	// urn:mace:shibboleth:1.0:nameIdentifier
+		// 	// urn:oasis:names:tc:SAML:2.0:nameid-format:transient
+		// 	Format: String(sp.nameIDFormat()),
+		// },
 		ForceAuthn:            sp.ForceAuthn,
 		RequestedAuthnContext: sp.RequestedAuthnContext,
+		Scoping:               sp.Scoping,
 	}
+
 	// We don't need to sign the XML document if the IDP uses HTTP-Redirect binding
 	if len(sp.SignatureMethod) > 0 && binding == HTTPPostBinding {
 		if err := sp.SignAuthnRequest(&req); err != nil {

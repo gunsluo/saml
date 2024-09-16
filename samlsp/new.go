@@ -25,8 +25,9 @@ type Options struct {
 	IDPMetadata           *saml.EntityDescriptor
 	SignRequest           bool
 	UseArtifactResponse   bool
-	ForceAuthn            bool // TODO(ross): this should be *bool
+	ForceAuthn            *bool
 	RequestedAuthnContext *saml.RequestedAuthnContext
+	Scoping               *saml.Scoping
 	CookieSameSite        http.SameSite
 	CookieName            string
 	RelayStateFunc        func(w http.ResponseWriter, r *http.Request) string
@@ -95,10 +96,6 @@ func DefaultServiceProvider(opts Options) saml.ServiceProvider {
 	acsURL := opts.URL.ResolveReference(&url.URL{Path: "saml/acs"})
 	sloURL := opts.URL.ResolveReference(&url.URL{Path: "saml/slo"})
 
-	var forceAuthn *bool
-	if opts.ForceAuthn {
-		forceAuthn = &opts.ForceAuthn
-	}
 	signatureMethod := dsig.RSASHA1SignatureMethod
 	if !opts.SignRequest {
 		signatureMethod = ""
@@ -122,8 +119,9 @@ func DefaultServiceProvider(opts Options) saml.ServiceProvider {
 		AcsURL:                *acsURL,
 		SloURL:                *sloURL,
 		IDPMetadata:           opts.IDPMetadata,
-		ForceAuthn:            forceAuthn,
+		ForceAuthn:            opts.ForceAuthn,
 		RequestedAuthnContext: opts.RequestedAuthnContext,
+		Scoping:               opts.Scoping,
 		SignatureMethod:       signatureMethod,
 		AllowIDPInitiated:     opts.AllowIDPInitiated,
 		DefaultRedirectURI:    opts.DefaultRedirectURI,

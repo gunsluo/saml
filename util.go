@@ -3,6 +3,9 @@ package saml
 import (
 	"crypto/rand"
 	"io"
+	mrand "math/rand"
+	"strconv"
+	"strings"
 	"time"
 
 	dsig "github.com/russellhaering/goxmldsig"
@@ -30,3 +33,25 @@ func randomBytes(n int) []byte {
 	}
 	return rv
 }
+
+func newID() string {
+	r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+	var sb strings.Builder
+	sb.WriteByte('a')
+	sb.WriteString(strconv.FormatInt(abs(r.Int63()), 20))
+	sb.WriteString(strconv.FormatInt(abs(r.Int63()), 20))
+	return sb.String()
+}
+
+func abs(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+func Bool(v bool) *bool { return &v }
+
+func String(v string) *string { return &v }
+
+func Int(v int) *int { return &v }
